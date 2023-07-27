@@ -7,12 +7,20 @@ interface Message {
   sender: string;
   content: string;
   timestamp: string;
+  currentUserSent?: boolean;
 }
+
+const formatTimestamp = (timestamp: string): string => {
+  const date: Date = new Date(timestamp);
+  let hours: string = String(date.getUTCHours()).padStart(2, '0');
+  let minutes: string = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
 
 const ChatRoom: React.FC = () => {
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[] | null>(null);
   const [rateLimitExceeded, setRateLimitExceeded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const timeFrame = 60 * 1000;
@@ -22,12 +30,12 @@ const ChatRoom: React.FC = () => {
     console.log('Listening for messages...');
     socket.on('message', (data: Message) => {
       console.log('Received message:', data);
-      setMessages((prevMessages) => [...prevMessages, data]);
+      setMessages((prevMessages) => (prevMessages ? [...prevMessages, { ...data, currentUserSent: false }] : [{ ...data, currentUserSent: false }]));
     });
 
     socket.on('history', (data: Message[]) => {
       console.log('Received history:', data);
-      setMessages(data);
+      setMessages(data.map((msg) => ({ ...msg, timestamp: formatTimestamp(msg.timestamp), currentUserSent: false })));
     });
 
     socket.on('connect_error', (error) => {
@@ -39,12 +47,12 @@ const ChatRoom: React.FC = () => {
       setRateLimitExceeded(true);
       setTimeout(() => setRateLimitExceeded(false), timeFrame);
     });
-
     return () => {
       // Before the component unmounts, disconnect the socket
       socket.off('message');
       socket.off('history');
       socket.off('connect_error');
+      socket.emit('requestHistory');
     };
   }, []);
 
@@ -72,9 +80,15 @@ const ChatRoom: React.FC = () => {
       sender: name,
       content: message,
       timestamp: new Date().toISOString(),
+      currentUserSent: true,
     };
-    socket.emit('message', data);
-    setMessages((prevMessages) => [...prevMessages, data]);
+    const dataToEmit: Message = {
+      sender: name,
+      content: message,
+      timestamp: new Date().toISOString(),
+    };
+    socket.emit('message', dataToEmit);
+    setMessages((prevMessages) => (prevMessages ? [...prevMessages, data] : [data]));
     setMessage('');
     setMessageCount(messageCount + 1);
     if (messageCount === 14) {
@@ -93,50 +107,77 @@ const ChatRoom: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-200 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+    <div className="w-full min-h-screen bg-white flex items-center justify-center px-4 sm:px-6 lg:px-8">
       <div className="max-w-[1080px] w-full space-y-6">
-        <div>
-          <h1 className="text-3xl mt-4 font-lbb font-semibold text-center mb-6">Chat Room</h1>
-          <div className="rounded-lg shadow-lg p-4 bg-white">
-            <div className="overflow-y-auto max-h-80">
-              {messages.map((msg, index) => (
-                <div key={index} className="mb-2" ref={index === messages.length - 1 ? messagesEndRef : null}>
-                  <div className='text-black'>
-                    <strong>{msg.sender}</strong>: {msg.content}
+        <h1 className="md:text-7xl sm:text-3xl xs:text-lg mt-4 font-pp font-bold text-center mb-6">Chat Room</h1>
+        <div className="rounded-lg bg-none border-2 border-black shadow-lg p-4 ">
+          <div className="overflow-y-auto max-h-80">
+            {messages ? (
+              messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`mb-2 ${msg.currentUserSent ? 'flex justify-end mr-4' : 'flex justify-start ml-4'}`}
+                  ref={index === messages.length - 1 ? messagesEndRef : null}
+                >
+                  <div className="flex flex-col">
+                    <div className={`mb-2 ${msg.currentUserSent ? 'flex justify-end' : 'flex justify-start'}`}>
+                      <label className="text-sm font-medium">
+                        {msg.sender} <span className="text-xs font-thin">{formatTimestamp(msg.timestamp)}</span>
+                      </label>
+                    </div>
+                    <div
+                      className={`rounded-lg text-md p-2 max-w-md ${
+                        msg.currentUserSent ? 'bg-white text-black shadow-lg' : 'bg-black text-white shadow-xl'
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            ) : (
+              <div>Loading history...</div>
+            )}
           </div>
         </div>
-        <div className="flex flex-col space-y-2 space-x-0">
+        <div className="flex flex-col space-y-2">
+          <label htmlFor="name" className="font-semibold text-gray-700">
+            Your Name
+          </label>
           <input
+            id="name"
             type="text"
-            placeholder="Your Name"
+            placeholder="Enter your Name"
             value={name}
             onChange={handleNameChange}
-            className="flex-1 w-64 rounded-lg py-2 px-4 bg-white text-gray-700 focus:outline-none"
+            className="flex-1 w-64 rounded-lg py-2 px-4 bg-white text-gray-700 focus:outline-black"
           />
+          <label htmlFor="message" className="font-semibold text-gray-700">
+            Message
+          </label>
           <input
+            id="message"
             type="text"
             placeholder="Type your message here"
             value={message}
             onChange={handleMessageChange}
             onKeyPress={handleKeyPress}
-            className="flex-1 appearance-none rounded-lg py-14 px-4 bg-white text-gray-700 focus:outline-none"
+            className="flex-1 rounded-lg py-2 px-4 bg-white text-gray-700 focus:outline-black"
           />
-          <div className='flex justify-end '>
-          <button
-            onClick={sendMessage}
-            disabled={rateLimitExceeded}
-            className=" w-24 px-2 py-2 bg-indigo-600 text-white font-semibold rounded-lg focus:outline-none"
-          >
-            Send
-          </button>
+          <div className="flex justify-end ">
+            <button
+              onClick={sendMessage}
+              disabled={rateLimitExceeded}
+              className=" w-24 px-2 py-2 bg-white border-2 border-black text-black shadow-2xl mb-6 hover:bg-black hover:text-white font-semibold rounded-lg focus:outline-none"
+            >
+              Send
+            </button>
           </div>
         </div>
         {rateLimitExceeded && (
-          <div className="text-red-600 text-sm">Rate limit exceeded. Please wait a moment before sending another message.</div>
+          <div className="text-red-600 text-sm">
+            Rate limit exceeded. Please wait a moment before sending another message.
+          </div>
         )}
       </div>
     </div>

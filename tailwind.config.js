@@ -6,7 +6,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        'lbb': ['Bungee Spice', 'cursive']
+        'lbb': ['Bungee Spice', 'cursive'],
+        'pp': ['Rampart One', 'cursive'],
       },
     },
   },
