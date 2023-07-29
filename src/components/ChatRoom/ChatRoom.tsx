@@ -108,11 +108,11 @@ const ChatRoom: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-doodle flex items-center justify-center px-4 sm:px-6 lg:px-8">
-      <div className='w-full h-full bg-white bg-opacity-80 flex items-center justify-center rounded-xl '>
+      <div className='w-full h-full bg-white bg-opacity-90 flex items-center justify-center rounded-xl '>
       <div className="max-w-[1080px] w-full space-y-6">
         <h1 className="md:text-7xl sm:text-3xl xs:text-lg mt-4 font-pp font-bold text-center mb-6">Chat Room</h1>
-        <div className="rounded-lg bg-white bg-opacity-80  shadow-2xl p-4 ">
-          <div className="overflow-y-auto max-h-80">
+        <div className="rounded-lg bg-white bg-opacity-80 shadow-2xl p-4 ">
+          <div className="overflow-y-auto max-h-80 ">
             {messages ? (
               messages.map((msg, index) => (
                 <div
