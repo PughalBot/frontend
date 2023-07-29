@@ -10,12 +10,25 @@ interface Message {
   currentUserSent?: boolean;
 }
 
-const formatTimestamp = (timestamp: string): string => {
-  const date: Date = new Date(timestamp);
-  let hours: string = String(date.getUTCHours()).padStart(2, '0');
-  let minutes: string = String(date.getUTCMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
-};
+function formatTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  
+  // Add suffix to day of the month
+  const suffix = ["th", "st", "nd", "rd"],
+        i = date.getDate() % 100;
+  
+  const day = date.getDate() + (suffix[(i - 20) % 10] || suffix[i] || suffix[0]);
+
+  // Get month name and full year
+  const month = date.toLocaleString('default', { month: 'long' });
+  const year = date.getFullYear();
+
+  // Get hours and minutes. If minutes is a single digit, prepend it with '0'
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+
+  return `${day} ${month} ${year} ${hours}:${minutes}`;
+}
 
 const ChatRoom: React.FC = () => {
   const [name, setName] = useState('');
@@ -27,15 +40,14 @@ const ChatRoom: React.FC = () => {
   const [messageCount, setMessageCount] = useState(0);
 
   useEffect(() => {
-    console.log('Listening for messages...');
     socket.on('message', (data: Message) => {
-      console.log('Received message:', data);
-      setMessages((prevMessages) => (prevMessages ? [...prevMessages, { ...data, currentUserSent: false }] : [{ ...data, currentUserSent: false }]));
+      if(data.sender !== name) {
+        setMessages((prevMessages) => prevMessages ? [...prevMessages, { ...data, currentUserSent: false }] : [{ ...data, currentUserSent: false }]);
+      }
     });
 
     socket.on('history', (data: Message[]) => {
-      console.log('Received history:', data);
-      setMessages(data.map((msg) => ({ ...msg, timestamp: formatTimestamp(msg.timestamp), currentUserSent: false })));
+      setMessages(data.map((msg) => ({ ...msg, timestamp: msg.timestamp, currentUserSent: msg.sender === name })));
     });
 
     socket.on('connect_error', (error) => {
@@ -47,14 +59,14 @@ const ChatRoom: React.FC = () => {
       setRateLimitExceeded(true);
       setTimeout(() => setRateLimitExceeded(false), timeFrame);
     });
+
     return () => {
-      // Before the component unmounts, disconnect the socket
       socket.off('message');
       socket.off('history');
       socket.off('connect_error');
       socket.emit('requestHistory');
     };
-  }, []);
+  }, [name]);
 
   useEffect(() => {
     scrollToBottom(); // Scroll to bottom whenever new messages are added
@@ -79,16 +91,11 @@ const ChatRoom: React.FC = () => {
     const data: Message = {
       sender: name,
       content: message,
-      timestamp: new Date().toISOString(),
+      timestamp: formatTimestamp(new Date().toISOString()),
       currentUserSent: true,
     };
-    const dataToEmit: Message = {
-      sender: name,
-      content: message,
-      timestamp: new Date().toISOString(),
-    };
-    socket.emit('message', dataToEmit);
-    setMessages((prevMessages) => (prevMessages ? [...prevMessages, data] : [data]));
+    socket.emit('message', data);
+    setMessages((prevMessages) => prevMessages ? [...prevMessages, data] : [data]);
     setMessage('');
     setMessageCount(messageCount + 1);
     if (messageCount === 14) {
@@ -123,7 +130,7 @@ const ChatRoom: React.FC = () => {
                   <div className="flex flex-col">
                     <div className={`mb-2 ${msg.currentUserSent ? 'flex justify-end' : 'flex justify-start'}`}>
                       <label className="text-sm font-medium">
-                        {msg.sender} <span className="text-xs font-thin">{formatTimestamp(msg.timestamp)}</span>
+                        {msg.sender} <span className="text-xs font-thin">{msg.timestamp}</span>
                       </label>
                     </div>
                     <div
@@ -169,14 +176,14 @@ const ChatRoom: React.FC = () => {
             <button
               onClick={sendMessage}
               disabled={rateLimitExceeded}
-              className=" w-24 px-2 py-2 bg-white border-2 border-black text-black shadow-2xl mb-6 hover:bg-black hover:text-white font-semibold rounded-lg focus:outline-none"
+              className=" w-24 px-2 py-2 bg-white border-2 border-black text-black shadow-2xl mb-2 hover:bg-black hover:text-white font-semibold rounded-lg focus:outline-none"
             >
               Send
             </button>
           </div>
         </div>
         {rateLimitExceeded && (
-          <div className="text-red-600 text-sm">
+          <div className="text-red-600 text-3xl pb-4">
             Rate limit exceeded. Please wait a moment before sending another message.
           </div>
         )}
